@@ -410,7 +410,7 @@ dnsPolicy: ClusterFirst​
 restartPolicy: Never​
 status: {}​
 
-```
+```​
 
 ```sh
 kubectl create -f multi-container.yaml​
@@ -419,4 +419,717 @@ kubectl get po busybox​
 ```
 
 </p>
+</details>
+
+
+
+
+
+# Question
+Create a Pod with main container image "busybox" and which executes the command:​
+* “while true; do echo ‘Hi I am from Main container’ >> /var/log/index.html; sleep 5; done” ​
+and with sidecar nginx container which exposes the container port 80.​
+
+Use emptyDir Volume and mount it on path:​
+* /var/log for busybox​
+* /usr/share/nginx/html for nginx ​
+Verify both containers are running.​
+
+<details><summary>show</summary>
+<p>
+
+Create an initial yaml file with this​
+
+```sh
+kubectl run multi-cont-pod --image=busbox --restart=Never --dry-run -o yaml > multi-container.yaml​
+
+​```
+
+Edit the yml as below and create it​
+
+```sh
+kubectl create -f multi-container.yamlkubectl get po multi-cont-pod​
+```
+
+```yaml
+apiVersion: v1​
+kind: Pod​
+metadata:​
+  name: multi-container-pod​
+spec:​
+  containers:​
+  - image: busybox​
+    name: busybox​
+    command:​
+    - sh​
+    - -c​
+    - while true; do echo ‘Hi I am from Main container’ >> /var/log/index.html; sleep 5; done;​
+    volumeMounts:​
+    - mountPath: /var/log​
+      name: empty-dir​
+  - image: nginx​
+    name: nginx​
+    volumeMounts:​
+    - mountPath: /usr/share/nginx/html​
+      name: empty-dir​
+  volumes:​
+  - name: empty-dir​
+    emptyDir: {}​
+```
+</p>
+</details>
+
+# Question
+* Create a multi-container pod using a volume named html, type emptyDir (which means    that the volume is first created when a Pod is assigned to a node and exists as long as that Pod is running on that node). ​
+  * The 1st container runs nginx server and has the shared volume mounted to the directory /usr/share/nginx/html. ​
+  * The 2nd container uses a debian image and has the shared volume mounted to the directory /html. Every second, the 2nd container adds the current date and time into the index.html file, which is located in the shared volume. ​
+
+Valide your solution​
+
+<details><summary>show</summary>
+<p>
+
+A standard use case for a multi-container Pod with a shared Volume is when one container writes logs or other files to the shared directory, and the other container reads from the shared directory. For example, we can create a Pod like so:
+​
+```sh
+
+cat <<EOF | kubectl apply -f -​
+apiVersion: v1​
+kind: Pod​
+metadata:​
+  name: mc1​
+spec:​
+  volumes:​
+  - name: html​
+    emptyDir: {}​
+  containers:​
+  - name: 1st​
+    image: nginx​
+    volumeMounts:​
+    - name: html​
+      mountPath: /usr/share/nginx/html​
+  - name: 2nd​
+    image: debian​
+    volumeMounts:​
+    - name: html​
+      mountPath: /html​
+    command: ["/bin/sh", "-c"]​
+    args:​
+      - while true; do​
+          date >> /html/index.html;​
+          sleep 1;​
+        done​
+
+EOF​
+```
+​
+
+In this example, we define a volume named html. Its type is emptyDir, which means that the volume is first created when a Pod is assigned to a node, and exists as long as that Pod is running on that node. As the name says, it is initially empty. The 1st container runs nginx server and has the shared volume mounted to the directory /usr/share/nginx/html. The 2nd container uses the Debian image and has the shared volume mounted to the directory /html. Every second, the 2nd container adds the current date and time into the index.html file, which is located in the shared volume. When the user makes an HTTP request to the Pod, the Nginx server reads this file and transfers it back to the user in response to the request.​
+
+​</p>
+</details>
+
+
+
+
+
+# Question
+* Create a POD using an Init Container to create a file named “sharedfile.txt” under the “/work” directory and the application container should check if the file exists and sleep for a while. If the file does not exist the application container should exit.
+
+<details><summary>show</summary>
+<p>
+
+```yaml
+---
+apiVersion: v1​
+kind: Pod​
+metadata:​
+name: init-container-test​
+spec:​
+containers:​
+- name: application-container​
+image: alpine​
+command: ['sh', '-c', 'if [ -f /work/sharedfile.txt ]; then sleep 99999; else exit; fi']​
+volumeMounts:​
+- name: workdir-volume​
+mountPath: /work​
+initContainers:​
+- name: init-container​
+image: busybox:1.28​
+command: ['sh', '-c', 'mkdir /work; echo>/work/sharedfile.txt']​
+volumeMounts:​
+- name: workdir-volume​
+mountPath: /work​
+volumes:​
+- name: workdir-volume​
+emptyDir: {}​
+
+```
+​</p>
+</details>
+
+
+# Pod Design (20%)​
+
+* Understand how to use Labels, Selectors and Annotations​
+  * https://kubernetes.io/docs/concepts/overview/working-with-objects/labels/​
+  * https://kubernetes.io/docs/concepts/overview/working-with-objects/annotations/​
+
+* Understand Deployments, rolling updates and rollbacks​
+  * https://kubernetes.io/docs/concepts/workloads/controllers/deployment/​
+
+* Understand Jobs and CronJobs​
+  * https://kubernetes.io/docs/concepts/workloads/controllers/jobs-run-to-completion/​
+  * https://kubernetes.io/docs/concepts/workloads/controllers/cron-jobs/
+
+
+# Questions
+
+* Create 6 nginx pods in which two of them are labeled env=prod, another two are labeled env=acc, and the last two are labeled env=dev​
+
+<details><summary>show</summary>
+<p>
+```sh 
+kubectl run nginx-dev1 --image=nginx --restart=Never --labels=env=dev​
+kubectl run nginx-dev2 --image=nginx --restart=Never --labels=env=dev​
+kubectl run nginx-acc1 --image=nginx --restart=Never --labels=env=acc​
+kubectl run nginx-acc2 --image=nginx --restart=Never --labels=env=acc​
+kubectl run nginx-prod1 --image=nginx --restart=Never --labels=env=prod​
+kubectl run nginx-prod2 --image=nginx --restart=Never --labels=env=prod​
+```
+​​</p>
+</details>
+
+* Verify all the pods are created with correct labels​
+
+<details><summary>show</summary>
+<p>
+```sh 
+kubeclt get pods --show-labels​
+```
+​​</p>
+</details>
+ ​
+
+* Get the pods with label env=acc​
+<details><summary>show</summary>
+<p>
+```sh 
+kubectl get pods -l env=acc​
+```
+​​</p>
+</details>
+ ​
+
+* Get the pods with label env​
+<details><summary>show</summary>
+<p>
+```sh 
+kubectl get pods -L env​
+```
+​​</p>
+</details>
+ ​
+
+* Get the pods with labels env=dev and env=prod and output the labels as well​
+<details><summary>show</summary>
+<p>
+```sh 
+kubectl get pods -l 'env in (dev,prod)' --show-labels​
+```
+​​</p>
+</details>
+ ​
+
+* Change the label for one of the pod to env=uat and list all the pods to verify​
+<details><summary>show</summary>
+<p>
+
+```sh 
+kubectl label pod/nginx-dev2 env=uat --overwrite​
+
+kubectl get pods --show-labels​
+```
+​​</p>
+</details>
+ ​
+
+* Remove the labels for the pods that we created now and verify all the labels are removed​
+<details><summary>show</summary>
+<p>
+
+```sh 
+kubectl label pod nginx-dev{1..2} env-​
+
+kubectl label pod nginx-acc{1..2} env-​
+
+kubectl label pod nginx-prod{1..2} env-​
+
+kubectl get po --show-labels​
+```
+​​</p>
+</details>
+ ​
+
+* Let’s add the label app=nginx for all the pods and verify​
+<details><summary>show</summary>
+<p>
+
+```sh 
+kubectl label pod nginx-dev{1..2} app=nginx​
+
+kubectl label pod nginx-acc{1..2} app=nginx​
+
+kubectl label pod nginx-prod{1..2} app=nginx​
+
+kubectl get po --show-labels​
+```
+​​</p>
+</details>
+ ​
+
+ ​
+
+* Get all the nodes with labels ​
+<details><summary>show</summary>
+<p>
+
+```sh 
+kubectl get nodes --show-labels​
+```
+​​</p>
+</details>
+ ​
+
+* Label the node nodeName=nginxnode​
+<details><summary>show</summary>
+<p>
+
+```sh 
+kubectl label node <nodename> nodeName=nginxnode​
+```
+​​</p>
+</details>
+ ​
+
+* Create a Pod that will be deployed on this node with the label nodeName=nginxnode​
+
+<details><summary>show</summary>
+<p>
+
+```sh
+kubectl run nginx --image=nginx --restart=Never --dry-run -o yaml > pod.yaml​
+```
+
+Add the nodeSelector like below and create the pod​ ​
+
+```yaml
+apiVersion: v1​
+kind: Pod​
+metadata:​
+  creationTimestamp: null​
+  labels:​
+    run: nginx​
+  name: nginx​
+spec:​
+  nodeSelector:​
+    nodeName: nginxnode​
+  containers:​
+  - image: nginx​
+    name: nginx​
+    resources: {}​
+  dnsPolicy: ClusterFirst​
+  restartPolicy: Never​
+status: {}​
+``` ​
+
+```sh
+kubectl create -f pod.yaml​
+
+```
+​​</p>
+</details>
+
+
+
+
+
+
+​
+
+* Get all the nodes with labels ​
+<details><summary>show</summary>
+<p>
+
+```sh
+kubectl get nodes --show-labels​
+```
+​​</p>
+</details>
+
+Label the node nodeName=nginxnode​
+
+```sh 
+kubectl label node <nodename> nodeName=nginxnode​
+```
+​​</p>
+</details>
+
+ ​
+
+* Create a Pod that will be deployed on this node with the label nodeName=nginxnode​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+kubectl run nginx --image=nginx --restart=Never --dry-run -o yaml > pod.yaml​
+```
+
+Add the nodeSelector like below and create the pod​
+
+ ​
+```yaml
+
+apiVersion: v1​
+kind: Pod​
+metadata:​
+  creationTimestamp: null​
+  labels:​
+    run: nginx​
+  name: nginx​
+spec:​
+  nodeSelector:​
+    nodeName: nginxnode​
+  containers:​
+  - image: nginx​
+    name: nginx​
+    resources: {}​
+  dnsPolicy: ClusterFirst​
+  restartPolicy: Never​
+status: {}​
+```
+
+```sh
+kubectl create -f pod.yaml​
+```
+​​</p>
+</details>
+
+
+
+
+
+
+
+
+ ​
+
+* Create a deployment called webapp with image nginx:1.17.1 with 5 replicas​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+kubectl create deployment webapp --image=nginx​
+```
+​​</p>
+</details>
+ ​
+
+ ​
+
+* Get the pods of this deployment and their labels​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+// get the label of the deployment​
+
+kubectl get deploy --show-labels​
+
+// get the pods with that label​
+
+kubectl get pods -l app=webapp​
+```
+​​</p>
+</details>
+ ​
+
+* Scale the deployment from 5 replicas to 10 replicas and verify​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+kubectl scale deploy webapp --replicas=10​
+
+kubectl get po -l app=webapp​
+```
+​​</p>
+</details>
+ ​
+
+* Get the deployment rollout status​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+kubectl rollout status deploy webapp​
+```
+​​</p>
+</details>
+ ​
+
+* Get the replicaset that created with this deployment​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+kubectl get rs -l app=webapp​
+```
+​​</p>
+</details>
+ ​
+
+* Get the yaml of the replicaset and pods of this deployment​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+ ​
+
+kubectl get rs -l app=webapp -o yaml​
+
+kubectl get po -l app=webapp -o yaml​
+```
+​​</p>
+</details>
+ ​
+
+ ​
+
+* Update the deployment with the image version 1.17.4 and verify​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+kubectl set image deploy/webapp nginx=nginx:1.17.4​
+
+kubectl describe deploy webapp | grep Image​
+
+```
+​​</p>
+</details>
+
+ ​
+
+* Check the rollout history and make sure everything is ok after the update​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+kubectl rollout history deploy webapp​
+
+kubectl get deploy webapp --show-labels​
+
+kubectl get rs -l app=webapp​
+
+kubectl get po -l app=webapp​
+```
+​​</p>
+</details>
+ ​
+
+ ​
+
+* Undo the deployment to the previous version 1.17.1 and verify Image has the previous version​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+kubectl rollout undo deploy webapp​
+
+kubectl describe deploy webapp | grep Image​
+```
+​​</p>
+</details>
+ ​
+
+* Update the deployment with the wrong image version 1.100 and verify something is wrong with the deployment​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+kubectl set image deploy/webapp nginx=nginx:1.100​
+
+kubectl rollout status deploy webapp (still pending state)​
+
+kubectl get pods (ImagePullErr)​
+```
+​​</p>
+</details>
+ ​
+
+* Undo the deployment with the previous version and verify everything is Ok​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+kubectl rollout undo deploy webapp​
+
+kubectl rollout status deploy webapp​
+
+kubectl get pods​
+```
+​​</p>
+</details>
+ ​
+
+ ​
+
+* Apply the autoscaling to this deployment with minimum 10 and maximum 20 replicas and target CPU of 85% and verify hpa is created and replicas are increased to 10 from 1​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+kubectl autoscale deploy webapp --min=10 --max=20 --cpu-percent=85​
+
+kubectl get hpa​
+
+kubectl get pod -l app=webapp​
+```
+​​</p>
+</details>
+ ​
+
+ ​
+
+* Clean Up​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+kubectl delete deploy webapp​
+
+kubectl delete hpa webapp​
+```
+​​</p>
+</details>
+​
+
+* Create a job with an image of busybox which echos “Hello I am from job” and make it run 10 times one after one​
+<details><summary>show</summary>
+<p>
+
+
+```sh  ​
+kubectl create job hello-job --image=busybox --dry-run -o yaml -- echo "Hello I am from job" > hello-job.yaml​
+```
+edit the yaml file to add completions: 10​
+
+```yaml
+apiVersion: batch/v1​
+kind: Job​
+metadata:​
+  creationTimestamp: null​
+  name: hello-job​
+spec:​
+  completions: 10​
+  template:​
+    metadata:​
+      creationTimestamp: null​
+    spec:​
+      containers:​
+      - command:​
+        - echo​
+        - Hello I am from job​
+        image: busybox​
+        name: hello-job​
+        resources: {}​
+      restartPolicy: Never​
+status: {}​
+```
+ ​
+```sh
+kubectl create -f hello-job.yaml​
+```
+ ​
+
+ ​
+
+ ​
+
+* Watch the job that runs 10 times one by one and verify 10 pods are created and delete those after it’s completed​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+kubectl get job -w​
+
+kubectl get po​
+
+kubectl delete job hello-job​
+```
+​​</p>
+</details>
+ ​
+
+ ​
+
+* Create the same job and make it run 10 times parallel​
+<details><summary>show</summary>
+<p>
+
+
+```yaml
+apiVersion: batch/v1​
+kind: Job​
+metadata:​
+  creationTimestamp: null​
+  name: hello-job​
+spec:​
+  parallelism: 10​
+  template:​
+    metadata:​
+      creationTimestamp: null​
+    spec:​
+      containers:​
+      - command:​
+        - echo​
+        - Hello I am from job​
+        image: busybox​
+        name: hello-job​
+        resources: {}​
+      restartPolicy: Never​
+status: {}​
+```
+​​</p>
+</details>
+ ​
+
+ ​
+
+* Create a Cronjob with busybox image that prints date and hello from kubernetes cluster message for every minute​
+<details><summary>show</summary>
+<p>
+
+
+```sh 
+kubectl create cronjob date-job --image=busybox --schedule="*/1 * * * *" -- bin/sh -c "date; echo Hello from kubernetes cluster"​
+
+```
+​​</p>
 </details>
