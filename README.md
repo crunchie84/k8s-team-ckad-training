@@ -205,3 +205,218 @@ Address: 10.96.0.10:53
 Name: kubernetes.default.svc.cluster.local
 Address: 10.96.0.1
 ```
+
+# CKAD Exam preparation by the Schuberg Philis Kubernetes Team
+
+# Who are we?​
+* Ivan Dechovski
+* Jeferson Vitalino
+* Alberto Rodriguez
+* Giancarlo Rubio 
+
+
+# What to expect from the exam?​
+
+* 19 questions in 2 hours.​
+
+* The CKAD is a performance driven exam, speed is key.​
+
+* Allowed documentation domains:​
+  * https://kubernetes.io/docs/​
+  * https://github.com/kubernetes/​
+  * https://kubernetes.io/blog/​
+
+* 66% is a pass.​
+
+* Free re-take ( if booked on cncf)
+
+
+# Exam tips​
+
+* https://kubernetes.io/docs/reference/kubectl/cheatsheet/​
+
+* Setup Kubectl Autocomplete at the start of the exam!​
+
+* Generate pod/service yaml with kubectl:​
+
+    * kubectl run nginx --image=nginx --restart=Never --dry-run -o yaml > pod.yaml​
+    * kubectl expose deployment nginx --port=80 --target-port=8000​
+
+* Use kubernetes documentation to find similar YAML manifests.​
+* If you are writing YAML, it will slow you down! Copy + paste and Edit.
+
+
+
+# Kubernetes Objects​
+Kubernetes defines a set of building blocks ("primitives"), which collectively provide mechanisms that deploy, maintain, and scale applications based on CPU, memory or custom metrics.​
+
+* Pods​
+* Replica Sets​
+* Services​
+* Volumes​
+* Namespaces​
+* ConfigMaps and Secrets​
+* StatefulSets​
+* DaemonSets​
+
+
+# Core Concepts (13%)​
+
+* Understand Kubernetes API Primitives​
+* Create and Configure Basic Pods
+
+# Core Concepts (13%)​ - Questions
+
+### Create the namespace sbp​
+<details><summary>show</summary>
+<p>
+kubectl create namespace sbp​
+</p>
+</details>
+
+### ​Using the new namespace, create the nginx pod with version 1.17.8 and expose port 80 of the pod
+<details><summary>show</summary>
+<p>
+kubectl -n sbp run nginx --image=nginx:1.17.8 --restart=Never --port=80
+</p>
+</details>
+
+### Change the image version to 1.17.8-alpine for the pod you just created and verify the image version is updated​
+<details><summary>show</summary>
+<p>
+kubectl -n sbp set image pod/nginx nginx=nginx:1.17.8-alpine​
+kubectl -n sbp describe po nginx​
+</p>
+</details>
+
+### Change the Image version back to 1.17.8 for the pod you just updated and observe the changes​
+<details><summary>show</summary>
+<p>
+kubectl –n sbp set image pod/nginx nginx=nginx:1.17.1​
+kubectl –n sbp describe po nginx​
+kubectl –n sbp get po nginx -w # watch it​
+</p>
+</details>
+
+### Check the Image version without the describe command​
+<details><summary>show</summary>
+<p>
+kubectl get po nginx -o jsonpath='{.spec.containers[].image}{"\n"}'​
+​</p>
+</details>
+
+### Get the IP Address of the pod you just created​
+<details><summary>show</summary>
+<p>
+kubectl get po nginx -o wide​
+kubectl get pod nginx -o jsonpath='{.status.podIP}'​
+</p>
+</details>
+
+### Create a busy busybox pod that keeps running​
+<details><summary>show</summary>
+<p>
+kubectl run busybox --image=busybox --restart=Never -- /bin/sh -c "sleep 3600"​
+</p>
+</details>
+
+### Check the connection of the nginx pod from the busybox pod​
+<details><summary>show</summary>
+<p>
+kubectl exec -it busybox -- wget -o- <IP Address>​
+kubectl run curl --image=curlimages/curl --restart=Never -it --rm -- sh -c "while true; do curl --connect-timeout 3 -I <POD_IP>:80 && sleep 1 ; done"​
+​</p>
+</details>
+
+### List the nginx pod with custom columns POD_NAME and POD_STATUS​
+<details><summary>show</summary>
+<p>
+kubectl get pod -o=custom-columns="POD_NAME:.metadata.name, POD_STATUS:.status.containerStatuses[].state"​
+</p>
+</details>
+
+### List all the pods sorted by name​
+<details><summary>show</summary>
+<p>
+kubectl get pods --sort-by=.metadata.name​
+</p>
+</details>
+
+### List all the pods sorted by created timestamp​
+<details><summary>show</summary>
+<p>
+kubectl get pods--sort-by=.metadata.creationTimestamp​
+</p>
+</details>
+
+
+# Multi-container Pods (10%)
+* Understand multi-container pod design patterns (eg: ambassador, adaptor, sidecar)​
+* https://kubernetes.io/docs/concepts/workloads/pods/pod-overview/
+
+
+# Question
+Create a Pod with three busy box containers with commands:
+* "ls; sleep 3600;"​
+* "echo Hello World; sleep 3600;"​
+* "echo this is the third container; sleep 3600"​
+respectively and check the status.​
+* Check the logs of each container that you just created​
+* Show metrics of the pod containers and puts them into file.log and verify
+
+<details><summary>show</summary>
+<p>
+
+first create single container pod with dry run flag​
+
+```sh
+kubectl run busybox --image=busybox --restart=Never --dry-run -o yaml -- bin/sh -c "sleep 3600; ls" > multi-container.yaml​
+```
+
+edit the pod to following yaml and create it​
+
+```yaml
+​apiVersion: v1​
+kind: Pod​
+metadata:​
+creationTimestamp: null​
+labels:​
+run: busybox​
+name: busybox​
+spec:​
+containers:​
+- args:​
+- bin/sh​
+- -c​
+- ls; sleep 3600​
+image: busybox​
+name: busybox1​
+resources: {}​
+- args:​
+- bin/sh​
+- -c​
+- echo Hello world; sleep 3600​
+image: busybox​
+name: busybox2​
+resources: {}​
+- args:​
+- bin/sh​
+- -c​
+- echo this is third container; sleep 3600​
+image: busybox​
+name: busybox3​
+resources: {}​
+dnsPolicy: ClusterFirst​
+restartPolicy: Never​
+status: {}​
+
+```
+
+```sh
+kubectl create -f multi-container.yaml​
+​
+kubectl get po busybox​
+```
+
+</p>
+</details>
